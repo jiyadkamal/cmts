@@ -2,164 +2,186 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import {
-    FolderKanban,
-    ListTodo,
-    Package,
-    DollarSign,
-    TrendingUp,
-    TrendingDown,
-    AlertTriangle,
-    Clock,
-    CheckCircle2,
-    ArrowUpRight,
-    Calendar,
-    Users
+  FolderKanban,
+  ListTodo,
+  Package,
+  DollarSign,
+  TrendingUp,
+  TrendingDown,
+  AlertTriangle,
+  Clock,
+  CheckCircle2,
+  ArrowUpRight,
+  Calendar,
+  Users
 } from 'lucide-react'
 import {
-    Chart as ChartJS,
-    CategoryScale,
-    LinearScale,
-    BarElement,
-    LineElement,
-    PointElement,
-    ArcElement,
-    Title,
-    Tooltip,
-    Legend,
-    Filler
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
 } from 'chart.js'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
-import ProgressBar from '../components/ProgressBar'
 import { formatCurrency, formatDate, formatCompact, getStatusColor } from '../utils/helpers'
 
 ChartJS.register(
-    CategoryScale,
-    LinearScale,
-    BarElement,
-    LineElement,
-    PointElement,
-    ArcElement,
-    Title,
-    Tooltip,
-    Legend,
-    Filler
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
 )
 
 function Dashboard() {
-    const { user, hasPermission } = useAuth()
-    const { projects, tasks, materials, budgets, getLowStockMaterials, getTotalBudget, getTotalExpenses } = useData()
+  const { user, hasPermission } = useAuth()
+  const {
+    projects,
+    tasks: allTasks,
+    materials: allMaterials,
+    budgets: allBudgets,
+    selectedProjectId,
+    selectedProject,
+    getTotalBudget,
+    getTotalExpenses
+  } = useData()
 
-    const activeProjects = projects.filter(p => p.status === 'In Progress').length
-    const completedProjects = projects.filter(p => p.status === 'Completed').length
-    const totalTasks = tasks.length
-    const completedTasks = tasks.filter(t => t.status === 'Completed').length
-    const inProgressTasks = tasks.filter(t => t.status === 'In Progress').length
-    const lowStockItems = getLowStockMaterials().length
-    const totalBudget = getTotalBudget()
-    const totalExpenses = getTotalExpenses()
-    const budgetUtilization = totalBudget > 0 ? (totalExpenses / totalBudget) * 100 : 0
+  // Filter data based on selected project
+  const tasks = selectedProjectId ? allTasks.filter(t => t.projectId === selectedProjectId) : []
+  const materials = selectedProjectId ? allMaterials.filter(m => m.projectId === selectedProjectId) : []
+  const budgets = selectedProjectId ? allBudgets.filter(b => b.projectId === selectedProjectId) : allBudgets
 
-    // Recent tasks
-    const recentTasks = [...tasks]
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-        .slice(0, 5)
+  const activeProjects = projects.filter(p => p.status === 'In Progress').length
+  const completedProjects = projects.filter(p => p.status === 'Completed').length
 
-    // Project progress chart data
-    const projectProgressData = {
-        labels: projects.slice(0, 5).map(p => p.name.length > 15 ? p.name.slice(0, 15) + '...' : p.name),
-        datasets: [{
-            label: 'Progress',
-            data: projects.slice(0, 5).map(p => p.progress),
-            backgroundColor: [
-                'rgba(249, 115, 22, 0.8)',
-                'rgba(59, 130, 246, 0.8)',
-                'rgba(16, 185, 129, 0.8)',
-                'rgba(245, 158, 11, 0.8)',
-                'rgba(139, 92, 246, 0.8)'
-            ],
-            borderRadius: 8,
-            borderSkipped: false,
-        }]
-    }
+  const totalTasks = tasks.length
+  const completedTasks = tasks.filter(t => t.status === 'Completed').length
+  const inProgressTasks = tasks.filter(t => t.status === 'In Progress').length
 
-    const chartOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: { display: false }
-        },
-        scales: {
-            x: {
-                grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                ticks: { color: 'rgba(255, 255, 255, 0.5)', font: { size: 11 } }
-            },
-            y: {
-                grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                ticks: { color: 'rgba(255, 255, 255, 0.5)' },
-                max: 100
-            }
+  // Low stock for selected project items
+  const lowStockItems = materials.filter(m => m.quantity <= m.minStock).length
+
+  // Budget stats
+  // If a project is selected, show its specific budget and spent amount.
+  // Otherwise, show the totals across all projects.
+  const totalBudget = selectedProjectId
+    ? (selectedProject?.budget || 0)
+    : projects.reduce((sum, p) => sum + (p.budget || 0), 0)
+
+  const totalExpenses = budgets.reduce((sum, b) => sum + (b.amount || 0), 0)
+  const budgetUtilization = totalBudget > 0 ? (totalExpenses / totalBudget) * 100 : 0
+
+  // Recent tasks
+  const recentTasks = [...tasks]
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, 5)
+
+  // Calculate Real Expense Trend (Last 6 Months)
+  const getExpenseTrend = () => {
+    const months = []
+    const data = []
+    const now = new Date()
+
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const monthName = d.toLocaleString('default', { month: 'short' })
+      months.push(monthName)
+
+      // Sum expenses for this month
+      const monthStart = d
+      const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59)
+
+      const monthSum = budgets.reduce((sum, b) => {
+        const expenseDate = new Date(b.date || b.createdAt)
+        if (expenseDate >= monthStart && expenseDate <= monthEnd) {
+          return sum + (b.amount || 0)
         }
+        return sum
+      }, 0)
+
+      data.push(monthSum / 1000) // Convert to K for easier display if needed, or leave as is. 
+      // Showing in K or M based on scale. Let's use actual values but scale them for the chart.
     }
 
-    // Task status chart
-    const taskStatusData = {
-        labels: ['Completed', 'In Progress', 'Todo'],
-        datasets: [{
-            data: [
-                tasks.filter(t => t.status === 'Completed').length,
-                tasks.filter(t => t.status === 'In Progress').length,
-                tasks.filter(t => t.status === 'Todo').length
-            ],
-            backgroundColor: [
-                'rgba(16, 185, 129, 0.8)',
-                'rgba(249, 115, 22, 0.8)',
-                'rgba(59, 130, 246, 0.8)'
-            ],
-            borderWidth: 0,
-            cutout: '70%'
-        }]
-    }
+    return { labels: months, data }
+  }
 
-    // Budget trend (mock monthly data)
-    const budgetTrendData = {
-        labels: ['Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan'],
-        datasets: [{
-            label: 'Expenses',
-            data: [2.1, 3.5, 4.2, 3.8, 5.1, 4.8],
-            borderColor: 'rgb(249, 115, 22)',
-            backgroundColor: 'rgba(249, 115, 22, 0.1)',
-            tension: 0.4,
-            fill: true,
-            pointBackgroundColor: 'rgb(249, 115, 22)',
-            pointBorderColor: 'rgb(249, 115, 22)',
-            pointRadius: 4
-        }]
-    }
+  const trend = getExpenseTrend()
 
-    const lineOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: { display: false }
-        },
-        scales: {
-            x: {
-                grid: { display: false },
-                ticks: { color: 'rgba(255, 255, 255, 0.5)' }
-            },
-            y: {
-                grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                ticks: {
-                    color: 'rgba(255, 255, 255, 0.5)',
-                    callback: (value) => `$${value}M`
-                }
-            }
+  const budgetTrendData = {
+    labels: trend.labels,
+    datasets: [{
+      label: 'Expenses',
+      data: trend.data,
+      borderColor: 'rgb(249, 115, 22)',
+      backgroundColor: 'rgba(249, 115, 22, 0.1)',
+      tension: 0.4,
+      fill: true,
+      pointBackgroundColor: 'rgb(249, 115, 22)',
+      pointBorderColor: 'rgb(249, 115, 22)',
+      pointRadius: 4
+    }]
+  }
+
+  const lineOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (context) => `$${context.parsed.y.toFixed(2)}K`
         }
+      }
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: { color: 'rgba(255, 255, 255, 0.5)' }
+      },
+      y: {
+        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+        ticks: {
+          color: 'rgba(255, 255, 255, 0.5)',
+          callback: (value) => `$${value}K`
+        }
+      }
     }
+  }
 
-    return (
-        <div className="dashboard">
-            <style>{`
+  // Task status chart
+  const taskStatusData = {
+    labels: ['Completed', 'In Progress', 'Todo'],
+    datasets: [{
+      data: [
+        tasks.filter(t => t.status === 'Completed').length,
+        tasks.filter(t => t.status === 'In Progress').length,
+        tasks.filter(t => t.status === 'Todo').length
+      ],
+      backgroundColor: [
+        'rgba(16, 185, 129, 0.8)',
+        'rgba(249, 115, 22, 0.8)',
+        'rgba(59, 130, 246, 0.8)'
+      ],
+      borderWidth: 0,
+      cutout: '70%'
+    }]
+  }
+
+  return (
+    <div className="dashboard">
+      <style>{`
         .dashboard {
           animation: fadeInUp var(--transition-slow) ease-out;
         }
@@ -217,7 +239,7 @@ function Dashboard() {
         
         .charts-grid {
           display: grid;
-          grid-template-columns: 2fr 1fr;
+          grid-template-columns: 1fr;
           gap: var(--space-6);
           margin-bottom: var(--space-8);
         }
@@ -362,11 +384,6 @@ function Dashboard() {
           color: var(--neutral-500);
         }
         
-        .project-progress {
-          width: 120px;
-          margin-left: var(--space-4);
-        }
-        
         .doughnut-center {
           position: absolute;
           top: 50%;
@@ -425,200 +442,188 @@ function Dashboard() {
         }
       `}</style>
 
-            {/* Welcome Section */}
-            <div className="welcome-section">
-                <h1 className="welcome-title">
-                    Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 18 ? 'Afternoon' : 'Evening'}, <span>{user?.name?.split(' ')[0]}</span>
-                </h1>
-                <p className="welcome-subtitle">
-                    Here's what's happening with your construction projects today.
-                </p>
-            </div>
+      {/* Welcome Section */}
+      <div className="welcome-section">
+        <h1 className="welcome-title">
+          Good {new Date().getHours() < 12 ? 'Morning' : new Date().getHours() < 18 ? 'Afternoon' : 'Evening'}, <span>{user?.name?.split(' ')[0]}</span>
+        </h1>
+        <p className="welcome-subtitle">
+          Here's what's happening with your construction projects today.
+        </p>
+      </div>
 
-            {/* Stats Grid */}
-            <div className="stats-grid">
-                <div className="stat-card">
-                    <div className="stat-icon stat-icon-primary">
-                        <FolderKanban size={24} />
-                    </div>
-                    <div className="stat-value">{activeProjects}</div>
-                    <div className="stat-label">Active Projects</div>
-                    <div className="stat-change stat-change-up">
-                        <TrendingUp size={14} />
-                        {completedProjects} completed
-                    </div>
-                </div>
-
-                <div className="stat-card">
-                    <div className="stat-icon stat-icon-accent">
-                        <ListTodo size={24} />
-                    </div>
-                    <div className="stat-value">{inProgressTasks}</div>
-                    <div className="stat-label">Tasks In Progress</div>
-                    <div className="stat-change stat-change-up">
-                        <CheckCircle2 size={14} />
-                        {completedTasks}/{totalTasks} done
-                    </div>
-                </div>
-
-                {hasPermission('manage_materials') && (
-                    <div className="stat-card">
-                        <div className="stat-icon stat-icon-warning">
-                            <Package size={24} />
-                        </div>
-                        <div className="stat-value">{materials.length}</div>
-                        <div className="stat-label">Material Items</div>
-                        {lowStockItems > 0 && (
-                            <div className="stat-change stat-change-down">
-                                <AlertTriangle size={14} />
-                                {lowStockItems} low stock
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {hasPermission('view_budget') && (
-                    <div className="stat-card">
-                        <div className="stat-icon stat-icon-success">
-                            <DollarSign size={24} />
-                        </div>
-                        <div className="stat-value">{formatCompact(totalExpenses)}</div>
-                        <div className="stat-label">Total Expenses</div>
-                        <div className="stat-change">
-                            <span style={{ color: budgetUtilization > 80 ? 'var(--danger-400)' : 'var(--success-400)' }}>
-                                {budgetUtilization.toFixed(0)}% of budget
-                            </span>
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* Charts Row */}
-            <div className="charts-grid">
-                <div className="chart-card">
-                    <div className="chart-header">
-                        <h3 className="chart-title">Project Progress</h3>
-                        <Link to="/projects" className="view-all-link">
-                            View All <ArrowUpRight size={16} />
-                        </Link>
-                    </div>
-                    <div className="chart-container">
-                        <Bar data={projectProgressData} options={chartOptions} />
-                    </div>
-                </div>
-
-                <div className="chart-card" style={{ position: 'relative' }}>
-                    <div className="chart-header">
-                        <h3 className="chart-title">Task Status</h3>
-                    </div>
-                    <div className="chart-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <div style={{ position: 'relative', width: '200px', height: '200px' }}>
-                            <Doughnut
-                                data={taskStatusData}
-                                options={{
-                                    responsive: true,
-                                    maintainAspectRatio: true,
-                                    plugins: { legend: { display: false } }
-                                }}
-                            />
-                            <div className="doughnut-center">
-                                <div className="doughnut-value">{totalTasks}</div>
-                                <div className="doughnut-label">Total Tasks</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: 'var(--space-6)', marginTop: 'var(--space-4)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                            <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: 'rgba(16, 185, 129, 0.8)' }}></div>
-                            <span className="text-sm text-muted">Completed</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                            <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: 'rgba(249, 115, 22, 0.8)' }}></div>
-                            <span className="text-sm text-muted">In Progress</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                            <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: 'rgba(59, 130, 246, 0.8)' }}></div>
-                            <span className="text-sm text-muted">Todo</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Budget Trend & Tasks */}
-            <div className="bottom-grid">
-                {hasPermission('view_budget') && (
-                    <div className="chart-card">
-                        <div className="chart-header">
-                            <h3 className="chart-title">Expense Trend</h3>
-                            <Link to="/budget" className="view-all-link">
-                                View Details <ArrowUpRight size={16} />
-                            </Link>
-                        </div>
-                        <div className="chart-container" style={{ height: '220px' }}>
-                            <Line data={budgetTrendData} options={lineOptions} />
-                        </div>
-                    </div>
-                )}
-
-                <div className="chart-card">
-                    <div className="chart-header">
-                        <h3 className="chart-title">Recent Tasks</h3>
-                        <Link to="/tasks" className="view-all-link">
-                            View All <ArrowUpRight size={16} />
-                        </Link>
-                    </div>
-                    <div>
-                        {recentTasks.map(task => (
-                            <div key={task.id} className="task-item">
-                                <div className={`task-icon ${task.status.toLowerCase().replace(' ', '-')}`}>
-                                    {task.status === 'Completed' ? <CheckCircle2 size={20} /> :
-                                        task.status === 'In Progress' ? <Clock size={20} /> :
-                                            <ListTodo size={20} />}
-                                </div>
-                                <div className="task-content">
-                                    <div className="task-title">{task.title}</div>
-                                    <div className="task-meta">
-                                        <Calendar size={12} />
-                                        {formatDate(task.dueDate)}
-                                        <span>•</span>
-                                        {task.assignee}
-                                    </div>
-                                </div>
-                                <span className={`badge badge-${getStatusColor(task.status)}`}>
-                                    {task.status}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
-
-            {/* Low Stock Alerts */}
-            {hasPermission('manage_materials') && lowStockItems > 0 && (
-                <div className="chart-card" style={{ marginTop: 'var(--space-6)' }}>
-                    <div className="chart-header">
-                        <h3 className="chart-title" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-                            <AlertTriangle size={20} color="var(--warning-400)" />
-                            Low Stock Alerts
-                        </h3>
-                        <Link to="/materials" className="view-all-link">
-                            Manage Inventory <ArrowUpRight size={16} />
-                        </Link>
-                    </div>
-                    <div>
-                        {getLowStockMaterials().slice(0, 3).map(material => (
-                            <div key={material.id} className="alert-item">
-                                <AlertTriangle size={18} className="alert-icon" />
-                                <span className="alert-text">
-                                    <strong>{material.name}</strong> is running low ({material.quantity} {material.unit} remaining, minimum: {material.minStock})
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+      {/* Stats Grid */}
+      <div className="stats-grid">
+        <div className="stat-card">
+          <div className="stat-icon stat-icon-primary">
+            <FolderKanban size={24} />
+          </div>
+          <div className="stat-value">{activeProjects}</div>
+          <div className="stat-label">Active Projects</div>
+          <div className="stat-change stat-change-up">
+            <TrendingUp size={14} />
+            {completedProjects} completed
+          </div>
         </div>
-    )
+
+        <div className="stat-card">
+          <div className="stat-icon stat-icon-accent">
+            <ListTodo size={24} />
+          </div>
+          <div className="stat-value">{inProgressTasks}</div>
+          <div className="stat-label">Tasks In Progress</div>
+          <div className="stat-change stat-change-up">
+            <CheckCircle2 size={14} />
+            {completedTasks}/{totalTasks} done
+          </div>
+        </div>
+
+        {hasPermission('manage_materials') && (
+          <div className="stat-card">
+            <div className="stat-icon stat-icon-warning">
+              <Package size={24} />
+            </div>
+            <div className="stat-value">{materials.length}</div>
+            <div className="stat-label">Material Items</div>
+            {lowStockItems > 0 && (
+              <div className="stat-change stat-change-down">
+                <AlertTriangle size={14} />
+                {lowStockItems} low stock
+              </div>
+            )}
+          </div>
+        )}
+
+        {hasPermission('view_budget') && (
+          <div className="stat-card">
+            <div className="stat-icon stat-icon-success">
+              <DollarSign size={24} />
+            </div>
+            <div className="stat-value">{formatCompact(totalExpenses)}</div>
+            <div className="stat-label">Total Expenses</div>
+            <div className="stat-change">
+              <span style={{ color: budgetUtilization > 80 ? 'var(--danger-400)' : 'var(--success-400)' }}>
+                {budgetUtilization.toFixed(0)}% of budget
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Charts Row */}
+      <div className="charts-grid">
+        <div className="chart-card" style={{ position: 'relative' }}>
+          <div className="chart-header">
+            <h3 className="chart-title">Task Status</h3>
+          </div>
+          <div className="chart-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ position: 'relative', width: '200px', height: '200px' }}>
+              <Doughnut
+                data={taskStatusData}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: true,
+                  plugins: { legend: { display: false } }
+                }}
+              />
+              <div className="doughnut-center">
+                <div className="doughnut-value">{totalTasks}</div>
+                <div className="doughnut-label">Total Tasks</div>
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 'var(--space-6)', marginTop: 'var(--space-4)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+              <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: 'rgba(16, 185, 129, 0.8)' }}></div>
+              <span className="text-sm text-muted">Completed</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+              <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: 'rgba(249, 115, 22, 0.8)' }}></div>
+              <span className="text-sm text-muted">In Progress</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+              <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: 'rgba(59, 130, 246, 0.8)' }}></div>
+              <span className="text-sm text-muted">Todo</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Budget Trend & Tasks */}
+      <div className="bottom-grid">
+        {hasPermission('view_budget') && (
+          <div className="chart-card">
+            <div className="chart-header">
+              <h3 className="chart-title">Expense Trend</h3>
+              <Link to="/budget" className="view-all-link">
+                View Details <ArrowUpRight size={16} />
+              </Link>
+            </div>
+            <div className="chart-container" style={{ height: '220px' }}>
+              <Line data={budgetTrendData} options={lineOptions} />
+            </div>
+          </div>
+        )}
+
+        <div className="chart-card">
+          <div className="chart-header">
+            <h3 className="chart-title">Recent Tasks</h3>
+            <Link to="/tasks" className="view-all-link">
+              View All <ArrowUpRight size={16} />
+            </Link>
+          </div>
+          <div>
+            {recentTasks.map(task => (
+              <div key={task.id} className="task-item">
+                <div className={`task-icon ${task.status.toLowerCase().replace(' ', '-')}`}>
+                  {task.status === 'Completed' ? <CheckCircle2 size={20} /> :
+                    task.status === 'In Progress' ? <Clock size={20} /> :
+                      <ListTodo size={20} />}
+                </div>
+                <div className="task-content">
+                  <div className="task-title">{task.title}</div>
+                  <div className="task-meta">
+                    <Calendar size={12} />
+                    {formatDate(task.dueDate)}
+                    <span>•</span>
+                    {task.assignee}
+                  </div>
+                </div>
+                <span className={`badge badge-${getStatusColor(task.status)}`}>
+                  {task.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Low Stock Alerts */}
+      {hasPermission('manage_materials') && lowStockItems > 0 && (
+        <div className="chart-card" style={{ marginTop: 'var(--space-6)' }}>
+          <div className="chart-header">
+            <h3 className="chart-title" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+              <AlertTriangle size={20} color="var(--warning-400)" />
+              Low Stock Alerts
+            </h3>
+            <Link to="/materials" className="view-all-link">
+              Manage Inventory <ArrowUpRight size={16} />
+            </Link>
+          </div>
+          <div>
+            {materials.filter(m => m.quantity <= m.minStock).slice(0, 3).map(material => (
+              <div key={material.id} className="alert-item">
+                <AlertTriangle size={18} className="alert-icon" />
+                <span className="alert-text">
+                  <strong>{material.name}</strong> is running low ({material.quantity} {material.unit} remaining, minimum: {material.minStock})
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default Dashboard

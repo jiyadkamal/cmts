@@ -35,9 +35,8 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tool
 
 function Budget() {
     const { hasPermission } = useAuth()
-    const { budgets, projects, addExpense, updateExpense, deleteExpense, getTotalBudget, getTotalExpenses } = useData()
+    const { budgets: allBudgets, projects, addExpense, updateExpense, deleteExpense, selectedProjectId, selectedProject } = useData()
     const [searchTerm, setSearchTerm] = useState('')
-    const [projectFilter, setProjectFilter] = useState('all')
     const [categoryFilter, setCategoryFilter] = useState('all')
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [editingExpense, setEditingExpense] = useState(null)
@@ -52,18 +51,22 @@ function Budget() {
         status: 'Pending'
     })
 
+    const budgets = selectedProjectId ? allBudgets.filter(b => b.projectId === selectedProjectId) : []
+
     const categories = [...new Set(budgets.map(b => b.category))]
-    const totalBudget = getTotalBudget()
-    const totalExpenses = getTotalExpenses()
+
+    // Project budget specific stats
+    const projectBudget = selectedProject ? selectedProject.budget : 0
+    const totalBudget = projectBudget
+    const totalExpenses = budgets.reduce((sum, b) => sum + b.amount, 0)
     const remainingBudget = totalBudget - totalExpenses
-    const utilizationPercent = calculateBudgetUtilization(totalExpenses, totalBudget)
+    const utilizationPercent = totalBudget > 0 ? (totalExpenses / totalBudget) * 100 : 0
 
     const filteredExpenses = budgets.filter(expense => {
         const matchesSearch = expense.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
             expense.vendor.toLowerCase().includes(searchTerm.toLowerCase())
-        const matchesProject = projectFilter === 'all' || expense.projectId === parseInt(projectFilter)
         const matchesCategory = categoryFilter === 'all' || expense.category === categoryFilter
-        return matchesSearch && matchesProject && matchesCategory
+        return matchesSearch && matchesCategory
     })
 
     const expensesByCategory = categories.map(cat => ({
@@ -95,17 +98,17 @@ function Budget() {
     }
 
     const projectBudgetData = {
-        labels: expensesByProject.slice(0, 5).map(p => p.project.length > 12 ? p.project.slice(0, 12) + '...' : p.project),
+        labels: selectedProject ? [selectedProject.name] : projects.slice(0, 5).map(p => p.name),
         datasets: [
             {
                 label: 'Budget',
-                data: expensesByProject.slice(0, 5).map(p => p.budget / 1000000),
+                data: selectedProject ? [selectedProject.budget / 1000000] : projects.slice(0, 5).map(p => p.budget / 1000000),
                 backgroundColor: 'rgba(59, 130, 246, 0.6)',
                 borderRadius: 6
             },
             {
                 label: 'Spent',
-                data: expensesByProject.slice(0, 5).map(p => p.spent / 1000000),
+                data: selectedProject ? [totalExpenses / 1000000] : projects.slice(0, 5).map(p => allBudgets.filter(b => b.projectId === p.id).reduce((s, b) => s + b.amount, 0) / 1000000),
                 backgroundColor: 'rgba(249, 115, 22, 0.8)',
                 borderRadius: 6
             }
@@ -148,7 +151,7 @@ function Budget() {
         } else {
             setEditingExpense(null)
             setFormData({
-                projectId: '',
+                projectId: selectedProjectId || '',
                 category: '',
                 description: '',
                 amount: '',
@@ -164,7 +167,7 @@ function Budget() {
         e.preventDefault()
         const expenseData = {
             ...formData,
-            projectId: parseInt(formData.projectId),
+            projectId: formData.projectId || selectedProjectId,
             amount: parseFloat(formData.amount) || 0
         }
 
@@ -679,16 +682,7 @@ function Budget() {
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <select
-                    className="filter-select"
-                    value={projectFilter}
-                    onChange={(e) => setProjectFilter(e.target.value)}
-                >
-                    <option value="all">All Projects</option>
-                    {projects.map(project => (
-                        <option key={project.id} value={project.id}>{project.name}</option>
-                    ))}
-                </select>
+                {/* Local filter removed in favor of global selector */}
                 <select
                     className="filter-select"
                     value={categoryFilter}

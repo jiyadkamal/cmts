@@ -1,77 +1,95 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 
-const AuthContext = createContext(null)
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
-// Demo users with different roles
-const DEMO_USERS = {
-    admin: {
-        id: 1,
-        username: 'admin',
-        password: 'admin123',
-        name: 'John Administrator',
-        email: 'admin@cmts.com',
-        role: 'Admin',
-        avatar: 'JA'
-    },
-    engineer: {
-        id: 2,
-        username: 'engineer',
-        password: 'eng123',
-        name: 'Sarah Engineer',
-        email: 'sarah@cmts.com',
-        role: 'Engineer',
-        avatar: 'SE'
-    },
-    contractor: {
-        id: 3,
-        username: 'contractor',
-        password: 'con123',
-        name: 'Mike Contractor',
-        email: 'mike@cmts.com',
-        role: 'Contractor',
-        avatar: 'MC'
-    },
-    client: {
-        id: 4,
-        username: 'client',
-        password: 'client123',
-        name: 'Emily Client',
-        email: 'emily@cmts.com',
-        role: 'Client',
-        avatar: 'EC'
-    }
-}
+const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null)
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        // Check for saved session
-        const savedUser = localStorage.getItem('cmts_user')
-        if (savedUser) {
-            setUser(JSON.parse(savedUser))
+        // Check for existing token and validate it
+        const token = localStorage.getItem('cmts_token')
+        if (token) {
+            verifyToken(token)
+        } else {
+            setLoading(false)
         }
-        setLoading(false)
     }, [])
 
-    const login = (username, password) => {
-        const foundUser = Object.values(DEMO_USERS).find(
-            u => u.username === username && u.password === password
-        )
+    const verifyToken = async (token) => {
+        try {
+            const response = await fetch(`${API_URL}/auth/me`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
 
-        if (foundUser) {
-            const { password: _, ...userWithoutPassword } = foundUser
-            setUser(userWithoutPassword)
-            localStorage.setItem('cmts_user', JSON.stringify(userWithoutPassword))
-            return { success: true }
+            if (response.ok) {
+                const userData = await response.json()
+                setUser(userData)
+            } else {
+                // Token invalid or expired
+                localStorage.removeItem('cmts_token')
+                localStorage.removeItem('cmts_user')
+            }
+        } catch (err) {
+            console.error('Token verification failed:', err)
+            localStorage.removeItem('cmts_token')
+            localStorage.removeItem('cmts_user')
+        } finally {
+            setLoading(false)
         }
+    }
 
-        return { success: false, error: 'Invalid username or password' }
+    const login = async (email, password) => {
+        try {
+            const response = await fetch(`${API_URL}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                return { success: false, error: data.error }
+            }
+
+            localStorage.setItem('cmts_token', data.token)
+            localStorage.setItem('cmts_user', JSON.stringify(data.user))
+            setUser(data.user)
+            return { success: true }
+        } catch (err) {
+            return { success: false, error: 'Network error. Make sure the server is running.' }
+        }
+    }
+
+    const register = async ({ name, email, password, role, department, phone }) => {
+        try {
+            const response = await fetch(`${API_URL}/auth/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, email, password, role, department, phone })
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                return { success: false, error: data.error }
+            }
+
+            localStorage.setItem('cmts_token', data.token)
+            localStorage.setItem('cmts_user', JSON.stringify(data.user))
+            setUser(data.user)
+            return { success: true }
+        } catch (err) {
+            return { success: false, error: 'Network error. Make sure the server is running.' }
+        }
     }
 
     const logout = () => {
         setUser(null)
+        localStorage.removeItem('cmts_token')
         localStorage.removeItem('cmts_user')
     }
 
@@ -80,8 +98,8 @@ export function AuthProvider({ children }) {
 
         const permissions = {
             Admin: ['manage_users', 'create_projects', 'view_projects', 'create_tasks', 'assign_tasks', 'update_tasks', 'manage_materials', 'view_budget', 'edit_budget'],
-            Engineer: ['create_projects', 'view_projects', 'create_tasks', 'assign_tasks', 'update_tasks', 'manage_materials', 'view_budget'],
-            Contractor: ['view_projects', 'update_tasks', 'manage_materials'],
+            Engineer: ['view_projects', 'create_tasks', 'assign_tasks', 'update_tasks', 'manage_materials', 'view_budget'],
+            Contractor: ['create_projects', 'view_projects', 'create_tasks', 'assign_tasks', 'update_tasks', 'manage_materials', 'view_budget', 'edit_budget'],
             Client: ['view_projects', 'view_budget']
         }
 
@@ -89,7 +107,7 @@ export function AuthProvider({ children }) {
     }
 
     return (
-        <AuthContext.Provider value={{ user, login, logout, loading, hasPermission, DEMO_USERS }}>
+        <AuthContext.Provider value={{ user, login, register, logout, loading, hasPermission }}>
             {children}
         </AuthContext.Provider>
     )

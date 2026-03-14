@@ -21,7 +21,8 @@ import { formatCurrency, formatNumber, getStockStatus, getStockColor } from '../
 
 function Materials() {
     const { hasPermission } = useAuth()
-    const { materials, projects, addMaterial, updateMaterial, deleteMaterial, getLowStockMaterials } = useData()
+    const { materials: allMaterials, projects, addMaterial, updateMaterial, deleteMaterial, getLowStockMaterials, selectedProjectId } = useData()
+    const materials = selectedProjectId ? allMaterials.filter(m => m.projectId === selectedProjectId) : []
     const [searchTerm, setSearchTerm] = useState('')
     const [categoryFilter, setCategoryFilter] = useState('all')
     const [stockFilter, setStockFilter] = useState('all')
@@ -82,7 +83,7 @@ function Materials() {
                 maxStock: '',
                 unitPrice: '',
                 supplier: '',
-                projectId: '',
+                projectId: selectedProjectId || '',
                 location: ''
             })
         }
@@ -97,7 +98,7 @@ function Materials() {
             minStock: parseFloat(formData.minStock) || 0,
             maxStock: parseFloat(formData.maxStock) || 0,
             unitPrice: parseFloat(formData.unitPrice) || 0,
-            projectId: formData.projectId ? parseInt(formData.projectId) : null
+            projectId: formData.projectId || selectedProjectId
         }
 
         try {

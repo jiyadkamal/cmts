@@ -1,9 +1,11 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
+import { useAuth } from './AuthContext'
+import api from '../lib/api'
 
 const DataContext = createContext(null)
 
 export function DataProvider({ children }) {
+    const { user: authUser } = useAuth()
     const [projects, setProjects] = useState([])
     const [tasks, setTasks] = useState([])
     const [materials, setMaterials] = useState([])
@@ -12,180 +14,87 @@ export function DataProvider({ children }) {
     const [loaded, setLoaded] = useState(false)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
+    const [selectedProjectId, setSelectedProjectId] = useState(() => {
+        return localStorage.getItem('cmts_selected_project_id') || ''
+    })
 
-    // Load all data from Supabase on mount
-    useEffect(() => {
-        async function loadData() {
-            try {
-                setLoading(true)
-                setError(null)
+    const loadData = useCallback(async () => {
+        try {
+            setLoading(true)
+            setError(null)
 
-                const [projectsRes, tasksRes, materialsRes, budgetsRes, usersRes] = await Promise.all([
-                    supabase.from('projects').select('*').order('id'),
-                    supabase.from('tasks').select('*').order('id'),
-                    supabase.from('materials').select('*').order('id'),
-                    supabase.from('budgets').select('*').order('id'),
-                    supabase.from('users').select('*').order('id')
-                ])
+            const results = await Promise.allSettled([
+                api.getAll('projects'),
+                api.getAll('tasks'),
+                api.getAll('materials'),
+                api.getAll('budgets'),
+                api.getAll('users')
+            ])
 
-                // Check for errors
-                if (projectsRes.error) throw projectsRes.error
-                if (tasksRes.error) throw tasksRes.error
-                if (materialsRes.error) throw materialsRes.error
-                if (budgetsRes.error) throw budgetsRes.error
-                if (usersRes.error) throw usersRes.error
+            const projectsData = results[0].status === 'fulfilled' ? results[0].value : []
+            const tasksData = results[1].status === 'fulfilled' ? results[1].value : []
+            const materialsData = results[2].status === 'fulfilled' ? results[2].value : []
+            const budgetsData = results[3].status === 'fulfilled' ? results[3].value : []
+            const usersData = results[4].status === 'fulfilled' ? results[4].value : []
 
-                // Transform snake_case to camelCase for frontend compatibility
-                setProjects(projectsRes.data.map(transformProject))
-                setTasks(tasksRes.data.map(transformTask))
-                setMaterials(materialsRes.data.map(transformMaterial))
-                setBudgets(budgetsRes.data.map(transformBudget))
-                setUsers(usersRes.data.map(transformUser))
-                setLoaded(true)
-            } catch (err) {
-                console.error('Error loading data from Supabase:', err)
-                setError(err.message)
-            } finally {
-                setLoading(false)
-            }
+            // Log any failed requests
+            results.forEach((r, i) => {
+                if (r.status === 'rejected') {
+                    const names = ['projects', 'tasks', 'materials', 'budgets', 'users']
+                    console.error(`Failed to load ${names[i]}:`, r.reason)
+                }
+            })
+
+            setProjects(projectsData)
+            setTasks(tasksData)
+            setMaterials(materialsData)
+            setBudgets(budgetsData)
+            setUsers(usersData)
+
+            // Validate selected project using functional update to avoid stale closure
+            setSelectedProjectId(prev => {
+                if (prev && !projectsData.find(p => p.id === prev)) {
+                    localStorage.removeItem('cmts_selected_project_id')
+                    return ''
+                } else if (!prev && projectsData.length > 0) {
+                    localStorage.setItem('cmts_selected_project_id', projectsData[0].id)
+                    return projectsData[0].id
+                }
+                return prev
+            })
+
+            setLoaded(true)
+        } catch (err) {
+            console.error('Error loading data from Firestore:', err)
+            setError(err.message)
+        } finally {
+            setLoading(false)
         }
-
-        loadData()
     }, [])
 
-    // Transform functions (snake_case -> camelCase)
-    const transformProject = (p) => ({
-        id: p.id,
-        name: p.name,
-        description: p.description,
-        client: p.client,
-        location: p.location,
-        startDate: p.start_date,
-        endDate: p.end_date,
-        budget: parseFloat(p.budget) || 0,
-        status: p.status,
-        progress: p.progress,
-        priority: p.priority,
-        manager: p.manager,
-        milestones: p.milestones || [],
-        createdAt: p.created_at
-    })
+    // Load data when user logs in; clear data when user logs out
+    useEffect(() => {
+        if (authUser) {
+            loadData()
+        } else {
+            // Reset all state on logout
+            setProjects([])
+            setTasks([])
+            setMaterials([])
+            setBudgets([])
+            setUsers([])
+            setLoaded(false)
+            setLoading(false)
+            setError(null)
+        }
+    }, [authUser?.id, loadData])
 
-    const transformTask = (t) => ({
-        id: t.id,
-        projectId: t.project_id,
-        title: t.title,
-        description: t.description,
-        status: t.status,
-        priority: t.priority,
-        assignee: t.assignee,
-        assigneeId: t.assignee_id,
-        dueDate: t.due_date,
-        estimatedHours: t.estimated_hours,
-        createdAt: t.created_at
-    })
-
-    const transformMaterial = (m) => ({
-        id: m.id,
-        name: m.name,
-        category: m.category,
-        unit: m.unit,
-        quantity: m.quantity,
-        minStock: m.min_stock,
-        maxStock: m.max_stock,
-        unitPrice: parseFloat(m.unit_price) || 0,
-        supplier: m.supplier,
-        projectId: m.project_id,
-        location: m.location,
-        lastUpdated: m.last_updated,
-        createdAt: m.created_at
-    })
-
-    const transformBudget = (b) => ({
-        id: b.id,
-        projectId: b.project_id,
-        category: b.category,
-        description: b.description,
-        amount: parseFloat(b.amount) || 0,
-        date: b.date,
-        vendor: b.vendor,
-        status: b.status,
-        createdAt: b.created_at
-    })
-
-    const transformUser = (u) => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        role: u.role,
-        department: u.department,
-        phone: u.phone,
-        avatar: u.avatar,
-        status: u.status,
-        joinedAt: u.joined_at
-    })
-
-    // Reverse transform functions (camelCase -> snake_case)
-    const toDbProject = (p) => ({
-        name: p.name,
-        description: p.description,
-        client: p.client,
-        location: p.location,
-        start_date: p.startDate,
-        end_date: p.endDate,
-        budget: p.budget,
-        status: p.status,
-        progress: p.progress || 0,
-        priority: p.priority,
-        manager: p.manager,
-        milestones: p.milestones || []
-    })
-
-    const toDbTask = (t) => ({
-        project_id: t.projectId,
-        title: t.title,
-        description: t.description,
-        status: t.status,
-        priority: t.priority,
-        assignee: t.assignee,
-        assignee_id: t.assigneeId,
-        due_date: t.dueDate,
-        estimated_hours: t.estimatedHours
-    })
-
-    const toDbMaterial = (m) => ({
-        name: m.name,
-        category: m.category,
-        unit: m.unit,
-        quantity: m.quantity,
-        min_stock: m.minStock,
-        max_stock: m.maxStock,
-        unit_price: m.unitPrice,
-        supplier: m.supplier,
-        project_id: m.projectId,
-        location: m.location
-    })
-
-    const toDbBudget = (b) => ({
-        project_id: b.projectId,
-        category: b.category,
-        description: b.description,
-        amount: b.amount,
-        date: b.date,
-        vendor: b.vendor,
-        status: b.status
-    })
-
-    // Project actions
+    // ==================
+    // Project Actions
+    // ==================
     const addProject = useCallback(async (project) => {
         try {
-            const { data, error } = await supabase
-                .from('projects')
-                .insert([toDbProject(project)])
-                .select()
-
-            if (error) throw error
-            const newProject = transformProject(data[0])
+            const newProject = await api.create('projects', project)
             setProjects(prev => [...prev, newProject])
             return newProject
         } catch (err) {
@@ -196,15 +105,9 @@ export function DataProvider({ children }) {
 
     const updateProject = useCallback(async (project) => {
         try {
-            const { data, error } = await supabase
-                .from('projects')
-                .update(toDbProject(project))
-                .eq('id', project.id)
-                .select()
-
-            if (error) throw error
-            const updatedProject = transformProject(data[0])
-            setProjects(prev => prev.map(p => p.id === project.id ? updatedProject : p))
+            const { id, ...data } = project
+            const updatedProject = await api.update('projects', id, data)
+            setProjects(prev => prev.map(p => p.id === id ? updatedProject : p))
             return updatedProject
         } catch (err) {
             console.error('Error updating project:', err)
@@ -214,29 +117,50 @@ export function DataProvider({ children }) {
 
     const deleteProject = useCallback(async (id) => {
         try {
-            const { error } = await supabase
-                .from('projects')
-                .delete()
-                .eq('id', id)
-
-            if (error) throw error
+            await api.remove('projects', id)
             setProjects(prev => prev.filter(p => p.id !== id))
+            // Reload data to clear orphan tasks/materials/budgets
+            await loadData()
         } catch (err) {
             console.error('Error deleting project:', err)
             throw err
         }
+    }, [loadData])
+
+    const handleSetSelectedProject = useCallback((id) => {
+        setSelectedProjectId(id)
+        if (id) {
+            localStorage.setItem('cmts_selected_project_id', id)
+        } else {
+            localStorage.removeItem('cmts_selected_project_id')
+        }
     }, [])
 
-    // Task actions
+    const joinProject = useCallback(async (id) => {
+        try {
+            const result = await api.joinProject(id)
+            // Immediately add the joined project to local state if returned
+            if (result.project) {
+                setProjects(prev => {
+                    // Avoid duplicates
+                    if (prev.find(p => p.id === result.project.id)) return prev
+                    return [result.project, ...prev]
+                })
+            }
+            // Also reload all data to get tasks/materials/budgets for the new project
+            await loadData()
+        } catch (err) {
+            console.error('Error joining project:', err)
+            throw err
+        }
+    }, [loadData])
+
+    // ==================
+    // Task Actions
+    // ==================
     const addTask = useCallback(async (task) => {
         try {
-            const { data, error } = await supabase
-                .from('tasks')
-                .insert([toDbTask(task)])
-                .select()
-
-            if (error) throw error
-            const newTask = transformTask(data[0])
+            const newTask = await api.create('tasks', task)
             setTasks(prev => [...prev, newTask])
             return newTask
         } catch (err) {
@@ -247,15 +171,9 @@ export function DataProvider({ children }) {
 
     const updateTask = useCallback(async (task) => {
         try {
-            const { data, error } = await supabase
-                .from('tasks')
-                .update(toDbTask(task))
-                .eq('id', task.id)
-                .select()
-
-            if (error) throw error
-            const updatedTask = transformTask(data[0])
-            setTasks(prev => prev.map(t => t.id === task.id ? updatedTask : t))
+            const { id, ...data } = task
+            const updatedTask = await api.update('tasks', id, data)
+            setTasks(prev => prev.map(t => t.id === id ? updatedTask : t))
             return updatedTask
         } catch (err) {
             console.error('Error updating task:', err)
@@ -265,12 +183,7 @@ export function DataProvider({ children }) {
 
     const deleteTask = useCallback(async (id) => {
         try {
-            const { error } = await supabase
-                .from('tasks')
-                .delete()
-                .eq('id', id)
-
-            if (error) throw error
+            await api.remove('tasks', id)
             setTasks(prev => prev.filter(t => t.id !== id))
         } catch (err) {
             console.error('Error deleting task:', err)
@@ -278,70 +191,55 @@ export function DataProvider({ children }) {
         }
     }, [])
 
-    // Material actions
+    // ==================
+    // Material Actions
+    // ==================
     const addMaterial = useCallback(async (material) => {
         try {
-            const { data, error } = await supabase
-                .from('materials')
-                .insert([toDbMaterial(material)])
-                .select()
-
-            if (error) throw error
-            const newMaterial = transformMaterial(data[0])
+            const newMaterial = await api.create('materials', material)
             setMaterials(prev => [...prev, newMaterial])
+            // Reload data to get updated budget entries
+            await loadData()
             return newMaterial
         } catch (err) {
             console.error('Error adding material:', err)
             throw err
         }
-    }, [])
+    }, [loadData])
 
     const updateMaterial = useCallback(async (material) => {
         try {
-            const dbMaterial = toDbMaterial(material)
-            dbMaterial.last_updated = new Date().toISOString()
-
-            const { data, error } = await supabase
-                .from('materials')
-                .update(dbMaterial)
-                .eq('id', material.id)
-                .select()
-
-            if (error) throw error
-            const updatedMaterial = transformMaterial(data[0])
-            setMaterials(prev => prev.map(m => m.id === material.id ? updatedMaterial : m))
+            const { id, ...data } = material
+            data.lastUpdated = new Date().toISOString()
+            const updatedMaterial = await api.update('materials', id, data)
+            setMaterials(prev => prev.map(m => m.id === id ? updatedMaterial : m))
+            // Reload data to get updated budget entries
+            await loadData()
             return updatedMaterial
         } catch (err) {
             console.error('Error updating material:', err)
             throw err
         }
-    }, [])
+    }, [loadData])
 
     const deleteMaterial = useCallback(async (id) => {
         try {
-            const { error } = await supabase
-                .from('materials')
-                .delete()
-                .eq('id', id)
-
-            if (error) throw error
+            await api.remove('materials', id)
             setMaterials(prev => prev.filter(m => m.id !== id))
+            // Reload data to get updated budget entries
+            await loadData()
         } catch (err) {
             console.error('Error deleting material:', err)
             throw err
         }
-    }, [])
+    }, [loadData])
 
-    // Budget actions
+    // ==================
+    // Budget (Expense) Actions
+    // ==================
     const addExpense = useCallback(async (expense) => {
         try {
-            const { data, error } = await supabase
-                .from('budgets')
-                .insert([toDbBudget(expense)])
-                .select()
-
-            if (error) throw error
-            const newExpense = transformBudget(data[0])
+            const newExpense = await api.create('budgets', expense)
             setBudgets(prev => [...prev, newExpense])
             return newExpense
         } catch (err) {
@@ -352,15 +250,9 @@ export function DataProvider({ children }) {
 
     const updateExpense = useCallback(async (expense) => {
         try {
-            const { data, error } = await supabase
-                .from('budgets')
-                .update(toDbBudget(expense))
-                .eq('id', expense.id)
-                .select()
-
-            if (error) throw error
-            const updatedExpense = transformBudget(data[0])
-            setBudgets(prev => prev.map(b => b.id === expense.id ? updatedExpense : b))
+            const { id, ...data } = expense
+            const updatedExpense = await api.update('budgets', id, data)
+            setBudgets(prev => prev.map(b => b.id === id ? updatedExpense : b))
             return updatedExpense
         } catch (err) {
             console.error('Error updating expense:', err)
@@ -370,12 +262,7 @@ export function DataProvider({ children }) {
 
     const deleteExpense = useCallback(async (id) => {
         try {
-            const { error } = await supabase
-                .from('budgets')
-                .delete()
-                .eq('id', id)
-
-            if (error) throw error
+            await api.remove('budgets', id)
             setBudgets(prev => prev.filter(b => b.id !== id))
         } catch (err) {
             console.error('Error deleting expense:', err)
@@ -383,11 +270,38 @@ export function DataProvider({ children }) {
         }
     }, [])
 
-    // Computed values
-    const getProjectById = useCallback((id) => projects.find(p => p.id === parseInt(id)), [projects])
-    const getTasksByProject = useCallback((projectId) => tasks.filter(t => t.projectId === parseInt(projectId)), [tasks])
-    const getMaterialsByProject = useCallback((projectId) => materials.filter(m => m.projectId === parseInt(projectId)), [materials])
-    const getBudgetByProject = useCallback((projectId) => budgets.filter(b => b.projectId === parseInt(projectId)), [budgets])
+    // ==================
+    // User Actions
+    // ==================
+    const updateUser = useCallback(async (user) => {
+        try {
+            const { id, ...data } = user
+            const updatedUser = await api.update('users', id, data)
+            setUsers(prev => prev.map(u => u.id === id ? updatedUser : u))
+            return updatedUser
+        } catch (err) {
+            console.error('Error updating user:', err)
+            throw err
+        }
+    }, [])
+
+    const deleteUser = useCallback(async (id) => {
+        try {
+            await api.remove('users', id)
+            setUsers(prev => prev.filter(u => u.id !== id))
+        } catch (err) {
+            console.error('Error deleting user:', err)
+            throw err
+        }
+    }, [])
+
+    // ==================
+    // Computed Values
+    // ==================
+    const getProjectById = useCallback((id) => projects.find(p => p.id === id), [projects])
+    const getTasksByProject = useCallback((projectId) => tasks.filter(t => t.projectId === projectId), [tasks])
+    const getMaterialsByProject = useCallback((projectId) => materials.filter(m => m.projectId === projectId), [materials])
+    const getBudgetByProject = useCallback((projectId) => budgets.filter(b => b.projectId === projectId), [budgets])
 
     const getTotalBudget = useCallback(() => projects.reduce((sum, p) => sum + (p.budget || 0), 0), [projects])
     const getTotalExpenses = useCallback(() => budgets.reduce((sum, b) => sum + (b.amount || 0), 0), [budgets])
@@ -407,6 +321,10 @@ export function DataProvider({ children }) {
             addProject,
             updateProject,
             deleteProject,
+            joinProject,
+            selectedProjectId,
+            setSelectedProjectId: handleSetSelectedProject,
+            selectedProject: projects.find(p => p.id === selectedProjectId),
             addTask,
             updateTask,
             deleteTask,
@@ -416,6 +334,8 @@ export function DataProvider({ children }) {
             addExpense,
             updateExpense,
             deleteExpense,
+            updateUser,
+            deleteUser,
             getProjectById,
             getTasksByProject,
             getMaterialsByProject,

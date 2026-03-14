@@ -21,9 +21,8 @@ import { formatDate, getPriorityColor, getStatusColor } from '../utils/helpers'
 
 function Tasks() {
     const { hasPermission, user } = useAuth()
-    const { tasks, projects, addTask, updateTask, deleteTask, users } = useData()
+    const { tasks, projects, addTask, updateTask, deleteTask, users, selectedProjectId } = useData()
     const [searchTerm, setSearchTerm] = useState('')
-    const [projectFilter, setProjectFilter] = useState('all')
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [editingTask, setEditingTask] = useState(null)
     const [activeMenu, setActiveMenu] = useState(null)
@@ -42,7 +41,7 @@ function Tasks() {
 
     const filteredTasks = tasks.filter(task => {
         const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase())
-        const matchesProject = projectFilter === 'all' || task.projectId === parseInt(projectFilter)
+        const matchesProject = !selectedProjectId || task.projectId === selectedProjectId
         return matchesSearch && matchesProject
     })
 
@@ -69,7 +68,7 @@ function Tasks() {
             setFormData({
                 title: '',
                 description: '',
-                projectId: '',
+                projectId: selectedProjectId || '',
                 status: 'Todo',
                 priority: 'Medium',
                 assignee: '',
@@ -85,8 +84,8 @@ function Tasks() {
         e.preventDefault()
         const taskData = {
             ...formData,
-            projectId: parseInt(formData.projectId),
-            assigneeId: formData.assigneeId ? parseInt(formData.assigneeId) : null,
+            projectId: formData.projectId, // Assuming Firestore IDs are strings now
+            assigneeId: formData.assigneeId || null,
             estimatedHours: formData.estimatedHours ? parseInt(formData.estimatedHours) : null
         }
 
@@ -512,16 +511,7 @@ function Tasks() {
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <select
-                    className="filter-select"
-                    value={projectFilter}
-                    onChange={(e) => setProjectFilter(e.target.value)}
-                >
-                    <option value="all">All Projects</option>
-                    {projects.map(project => (
-                        <option key={project.id} value={project.id}>{project.name}</option>
-                    ))}
-                </select>
+                {/* Local filter removed in favor of global selector */}
 
                 <div className="task-stats">
                     <div className="task-stat">
@@ -729,7 +719,7 @@ function Tasks() {
                     </div>
                 </form>
             </Modal>
-        </div>
+        </div >
     )
 }
 

@@ -3,68 +3,68 @@ import { useData } from '../context/DataContext'
 import { useAuth } from '../context/AuthContext'
 import ProgressBar from '../components/ProgressBar'
 import {
-    ArrowLeft,
-    Calendar,
-    MapPin,
-    DollarSign,
-    Users,
-    Clock,
-    CheckCircle2,
-    Circle,
-    AlertCircle,
-    ListTodo,
-    Package,
-    TrendingUp,
-    Building2,
-    User
+  ArrowLeft,
+  Calendar,
+  MapPin,
+  DollarSign,
+  Users,
+  Clock,
+  CheckCircle2,
+  Circle,
+  AlertCircle,
+  ListTodo,
+  Package,
+  TrendingUp,
+  Building2,
+  User
 } from 'lucide-react'
 import { formatCurrency, formatDate, getDaysRemainingText, getStatusColor, getPriorityColor } from '../utils/helpers'
 
 function ProjectDetail() {
-    const { id } = useParams()
-    const { hasPermission } = useAuth()
-    const { getProjectById, getTasksByProject, getBudgetByProject } = useData()
+  const { id } = useParams()
+  const { hasPermission } = useAuth()
+  const { getProjectById, getTasksByProject, getBudgetByProject } = useData()
 
-    const project = getProjectById(id)
-    const tasks = getTasksByProject(id)
-    const expenses = getBudgetByProject(id)
+  const project = getProjectById(id)
+  const tasks = getTasksByProject(id)
+  const expenses = getBudgetByProject(id)
 
-    if (!project) {
-        return (
-            <div className="empty-state">
-                <div className="empty-state-icon">
-                    <Building2 size={40} />
-                </div>
-                <h3 className="empty-state-title">Project not found</h3>
-                <p className="empty-state-description">The project you're looking for doesn't exist.</p>
-                <Link to="/projects" className="btn btn-primary">
-                    <ArrowLeft size={20} />
-                    Back to Projects
-                </Link>
-            </div>
-        )
-    }
-
-    const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0)
-    const budgetUtilization = project.budget > 0 ? (totalExpenses / project.budget) * 100 : 0
-    const completedTasks = tasks.filter(t => t.status === 'Completed').length
-    const completedMilestones = project.milestones?.filter(m => m.status === 'Completed').length || 0
-    const totalMilestones = project.milestones?.length || 0
-
-    const getMilestoneIcon = (status) => {
-        switch (status) {
-            case 'Completed':
-                return <CheckCircle2 size={18} className="milestone-icon completed" />
-            case 'In Progress':
-                return <Clock size={18} className="milestone-icon in-progress" />
-            default:
-                return <Circle size={18} className="milestone-icon pending" />
-        }
-    }
-
+  if (!project) {
     return (
-        <div className="project-detail">
-            <style>{`
+      <div className="empty-state">
+        <div className="empty-state-icon">
+          <Building2 size={40} />
+        </div>
+        <h3 className="empty-state-title">Project not found</h3>
+        <p className="empty-state-description">The project you're looking for doesn't exist.</p>
+        <Link to="/projects" className="btn btn-primary">
+          <ArrowLeft size={20} />
+          Back to Projects
+        </Link>
+      </div>
+    )
+  }
+
+  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0)
+  const budgetUtilization = project.budget > 0 ? (totalExpenses / project.budget) * 100 : 0
+  const completedTasks = tasks.filter(t => t.status === 'Completed').length
+  const completedMilestones = project.milestones?.filter(m => m.status === 'Completed').length || 0
+  const totalMilestones = project.milestones?.length || 0
+
+  const getMilestoneIcon = (status) => {
+    switch (status) {
+      case 'Completed':
+        return <CheckCircle2 size={18} className="milestone-icon completed" />
+      case 'In Progress':
+        return <Clock size={18} className="milestone-icon in-progress" />
+      default:
+        return <Circle size={18} className="milestone-icon pending" />
+    }
+  }
+
+  return (
+    <div className="project-detail">
+      <style>{`
         .project-detail {
           animation: fadeInUp var(--transition-slow) ease-out;
         }
@@ -365,16 +365,6 @@ function ProjectDetail() {
           color: var(--danger-400);
         }
         
-        .progress-section {
-          margin-top: var(--space-4);
-        }
-        
-        .progress-label {
-          display: flex;
-          justify-content: space-between;
-          margin-bottom: var(--space-2);
-          font-size: var(--font-size-sm);
-        }
         
         .expense-item {
           display: flex;
@@ -408,230 +398,221 @@ function ProjectDetail() {
         }
       `}</style>
 
-            {/* Back Link */}
-            <Link to="/projects" className="back-link">
-                <ArrowLeft size={18} />
-                Back to Projects
-            </Link>
+      {/* Back Link */}
+      <Link to="/projects" className="back-link">
+        <ArrowLeft size={18} />
+        Back to Projects
+      </Link>
 
-            {/* Hero Section */}
-            <div className="project-hero">
-                <div className="hero-header">
-                    <div>
-                        <h1 className="project-title">{project.name}</h1>
-                        <p className="project-client">{project.client}</p>
-                    </div>
-                    <div className="hero-badges">
-                        <span className={`badge badge-${getStatusColor(project.status)}`}>
-                            {project.status}
-                        </span>
-                        <span className={`badge badge-${getPriorityColor(project.priority)}`}>
-                            {project.priority} Priority
-                        </span>
-                    </div>
-                </div>
-
-                <p className="project-description">{project.description}</p>
-
-                <div className="hero-stats">
-                    <div className="hero-stat">
-                        <div className="hero-stat-icon">
-                            <MapPin size={24} />
-                        </div>
-                        <div className="hero-stat-content">
-                            <div className="hero-stat-value">{project.location.split(',')[0]}</div>
-                            <div className="hero-stat-label">Location</div>
-                        </div>
-                    </div>
-
-                    <div className="hero-stat">
-                        <div className="hero-stat-icon" style={{ background: 'rgba(59, 130, 246, 0.15)', color: 'var(--accent-400)' }}>
-                            <Calendar size={24} />
-                        </div>
-                        <div className="hero-stat-content">
-                            <div className="hero-stat-value">{formatDate(project.endDate)}</div>
-                            <div className="hero-stat-label">{getDaysRemainingText(project.endDate)}</div>
-                        </div>
-                    </div>
-
-                    <div className="hero-stat">
-                        <div className="hero-stat-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--success-400)' }}>
-                            <DollarSign size={24} />
-                        </div>
-                        <div className="hero-stat-content">
-                            <div className="hero-stat-value">{formatCurrency(project.budget)}</div>
-                            <div className="hero-stat-label">Total Budget</div>
-                        </div>
-                    </div>
-
-                    <div className="hero-stat">
-                        <div className="hero-stat-icon" style={{ background: 'rgba(139, 92, 246, 0.15)', color: 'rgb(139, 92, 246)' }}>
-                            <TrendingUp size={24} />
-                        </div>
-                        <div className="hero-stat-content">
-                            <div className="hero-stat-value">{project.progress}%</div>
-                            <div className="hero-stat-label">Complete</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Detail Grid */}
-            <div className="detail-grid">
-                <div className="detail-main">
-                    {/* Milestones */}
-                    <div className="section-card">
-                        <div className="section-header">
-                            <h2 className="section-title">
-                                <CheckCircle2 size={20} style={{ color: 'var(--success-400)' }} />
-                                Milestones
-                            </h2>
-                            <span className="text-sm text-muted">
-                                {completedMilestones}/{totalMilestones} completed
-                            </span>
-                        </div>
-
-                        <div className="milestone-list">
-                            {project.milestones?.map((milestone) => (
-                                <div key={milestone.id} className="milestone-item">
-                                    {getMilestoneIcon(milestone.status)}
-                                    <div className="milestone-content">
-                                        <div className="milestone-name">{milestone.name}</div>
-                                        <div className="milestone-date">Due: {formatDate(milestone.date)}</div>
-                                    </div>
-                                    <span className={`badge badge-${getStatusColor(milestone.status)}`}>
-                                        {milestone.status}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Tasks */}
-                    <div className="section-card">
-                        <div className="section-header">
-                            <h2 className="section-title">
-                                <ListTodo size={20} style={{ color: 'var(--accent-400)' }} />
-                                Related Tasks
-                            </h2>
-                            <Link to="/tasks" className="btn btn-secondary btn-sm">
-                                View All
-                            </Link>
-                        </div>
-
-                        <div className="task-list">
-                            {tasks.length > 0 ? tasks.map((task) => (
-                                <div key={task.id} className="task-item">
-                                    {task.status === 'Completed' ? (
-                                        <CheckCircle2 size={18} className="task-status-icon completed" />
-                                    ) : task.status === 'In Progress' ? (
-                                        <Clock size={18} className="task-status-icon in-progress" />
-                                    ) : (
-                                        <Circle size={18} className="task-status-icon todo" />
-                                    )}
-                                    <div className="task-info">
-                                        <div className="task-title">{task.title}</div>
-                                        <div className="task-meta">{task.assignee} • Due {formatDate(task.dueDate)}</div>
-                                    </div>
-                                    <span className={`badge badge-${getStatusColor(task.status)}`}>
-                                        {task.status}
-                                    </span>
-                                </div>
-                            )) : (
-                                <p className="text-muted text-sm" style={{ padding: 'var(--space-4)', textAlign: 'center' }}>
-                                    No tasks assigned to this project yet.
-                                </p>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="detail-sidebar">
-                    {/* Budget Overview */}
-                    {hasPermission('view_budget') && (
-                        <div className="section-card">
-                            <div className="section-header">
-                                <h2 className="section-title">
-                                    <DollarSign size={20} style={{ color: 'var(--success-400)' }} />
-                                    Budget
-                                </h2>
-                            </div>
-
-                            <div className="budget-overview">
-                                <div className="budget-row">
-                                    <span className="budget-label">Total Budget</span>
-                                    <span className="budget-value">{formatCurrency(project.budget)}</span>
-                                </div>
-                                <div className="budget-row">
-                                    <span className="budget-label">Spent</span>
-                                    <span className="budget-value primary">{formatCurrency(totalExpenses)}</span>
-                                </div>
-                                <div className="budget-row">
-                                    <span className="budget-label">Remaining</span>
-                                    <span className={`budget-value ${project.budget - totalExpenses < 0 ? 'danger' : 'success'}`}>
-                                        {formatCurrency(project.budget - totalExpenses)}
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div className="progress-section">
-                                <div className="progress-label">
-                                    <span className="text-muted">Utilization</span>
-                                    <span>{budgetUtilization.toFixed(0)}%</span>
-                                </div>
-                                <ProgressBar
-                                    value={budgetUtilization}
-                                    variant={budgetUtilization > 90 ? 'danger' : budgetUtilization > 70 ? 'warning' : 'success'}
-                                />
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Project Manager */}
-                    <div className="section-card">
-                        <div className="section-header">
-                            <h2 className="section-title">
-                                <User size={20} style={{ color: 'var(--primary-400)' }} />
-                                Project Manager
-                            </h2>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-                            <div className="avatar" style={{ background: 'var(--accent-gradient)' }}>
-                                {project.manager?.split(' ').map(n => n[0]).join('') || 'PM'}
-                            </div>
-                            <div>
-                                <div style={{ fontWeight: 500, color: 'var(--neutral-100)' }}>{project.manager || 'Not assigned'}</div>
-                                <div className="text-sm text-muted">Project Manager</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Recent Expenses */}
-                    {hasPermission('view_budget') && expenses.length > 0 && (
-                        <div className="section-card">
-                            <div className="section-header">
-                                <h2 className="section-title">
-                                    Recent Expenses
-                                </h2>
-                            </div>
-
-                            <div>
-                                {expenses.slice(0, 4).map((expense) => (
-                                    <div key={expense.id} className="expense-item">
-                                        <div className="expense-info">
-                                            <div className="expense-desc">{expense.description.slice(0, 30)}...</div>
-                                            <div className="expense-date">{formatDate(expense.date)}</div>
-                                        </div>
-                                        <span className="expense-amount">{formatCurrency(expense.amount)}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
+      {/* Hero Section */}
+      <div className="project-hero">
+        <div className="hero-header">
+          <div>
+            <h1 className="project-title">{project.name}</h1>
+            <p className="project-client">{project.client}</p>
+          </div>
+          <div className="hero-badges">
+            <span className={`badge badge-${getStatusColor(project.status)}`}>
+              {project.status}
+            </span>
+            <span className={`badge badge-${getPriorityColor(project.priority)}`}>
+              {project.priority} Priority
+            </span>
+          </div>
         </div>
-    )
+
+        <p className="project-description">{project.description}</p>
+
+        <div className="hero-stats">
+          <div className="hero-stat">
+            <div className="hero-stat-icon">
+              <MapPin size={24} />
+            </div>
+            <div className="hero-stat-content">
+              <div className="hero-stat-value">{project.location.split(',')[0]}</div>
+              <div className="hero-stat-label">Location</div>
+            </div>
+          </div>
+
+          <div className="hero-stat">
+            <div className="hero-stat-icon" style={{ background: 'rgba(59, 130, 246, 0.15)', color: 'var(--accent-400)' }}>
+              <Calendar size={24} />
+            </div>
+            <div className="hero-stat-content">
+              <div className="hero-stat-value">{formatDate(project.endDate)}</div>
+              <div className="hero-stat-label">{getDaysRemainingText(project.endDate)}</div>
+            </div>
+          </div>
+
+          <div className="hero-stat">
+            <div className="hero-stat-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--success-400)' }}>
+              <DollarSign size={24} />
+            </div>
+            <div className="hero-stat-content">
+              <div className="hero-stat-value">{formatCurrency(project.budget)}</div>
+              <div className="hero-stat-label">Total Budget</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* Detail Grid */}
+      <div className="detail-grid">
+        <div className="detail-main">
+          {/* Milestones */}
+          <div className="section-card">
+            <div className="section-header">
+              <h2 className="section-title">
+                <CheckCircle2 size={20} style={{ color: 'var(--success-400)' }} />
+                Milestones
+              </h2>
+              <span className="text-sm text-muted">
+                {completedMilestones}/{totalMilestones} completed
+              </span>
+            </div>
+
+            <div className="milestone-list">
+              {project.milestones?.map((milestone) => (
+                <div key={milestone.id} className="milestone-item">
+                  {getMilestoneIcon(milestone.status)}
+                  <div className="milestone-content">
+                    <div className="milestone-name">{milestone.name}</div>
+                    <div className="milestone-date">Due: {formatDate(milestone.date)}</div>
+                  </div>
+                  <span className={`badge badge-${getStatusColor(milestone.status)}`}>
+                    {milestone.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Tasks */}
+          <div className="section-card">
+            <div className="section-header">
+              <h2 className="section-title">
+                <ListTodo size={20} style={{ color: 'var(--accent-400)' }} />
+                Related Tasks
+              </h2>
+              <Link to="/tasks" className="btn btn-secondary btn-sm">
+                View All
+              </Link>
+            </div>
+
+            <div className="task-list">
+              {tasks.length > 0 ? tasks.map((task) => (
+                <div key={task.id} className="task-item">
+                  {task.status === 'Completed' ? (
+                    <CheckCircle2 size={18} className="task-status-icon completed" />
+                  ) : task.status === 'In Progress' ? (
+                    <Clock size={18} className="task-status-icon in-progress" />
+                  ) : (
+                    <Circle size={18} className="task-status-icon todo" />
+                  )}
+                  <div className="task-info">
+                    <div className="task-title">{task.title}</div>
+                    <div className="task-meta">{task.assignee} • Due {formatDate(task.dueDate)}</div>
+                  </div>
+                  <span className={`badge badge-${getStatusColor(task.status)}`}>
+                    {task.status}
+                  </span>
+                </div>
+              )) : (
+                <p className="text-muted text-sm" style={{ padding: 'var(--space-4)', textAlign: 'center' }}>
+                  No tasks assigned to this project yet.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="detail-sidebar">
+          {/* Budget Overview */}
+          {hasPermission('view_budget') && (
+            <div className="section-card">
+              <div className="section-header">
+                <h2 className="section-title">
+                  <DollarSign size={20} style={{ color: 'var(--success-400)' }} />
+                  Budget
+                </h2>
+              </div>
+
+              <div className="budget-overview">
+                <div className="budget-row">
+                  <span className="budget-label">Total Budget</span>
+                  <span className="budget-value">{formatCurrency(project.budget)}</span>
+                </div>
+                <div className="budget-row">
+                  <span className="budget-label">Spent</span>
+                  <span className="budget-value primary">{formatCurrency(totalExpenses)}</span>
+                </div>
+                <div className="budget-row">
+                  <span className="budget-label">Remaining</span>
+                  <span className={`budget-value ${project.budget - totalExpenses < 0 ? 'danger' : 'success'}`}>
+                    {formatCurrency(project.budget - totalExpenses)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="progress-section">
+                <div className="progress-label">
+                  <span className="text-muted">Utilization</span>
+                  <span>{budgetUtilization.toFixed(0)}%</span>
+                </div>
+                <ProgressBar
+                  value={budgetUtilization}
+                  variant={budgetUtilization > 90 ? 'danger' : budgetUtilization > 70 ? 'warning' : 'success'}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Project Manager */}
+          <div className="section-card">
+            <div className="section-header">
+              <h2 className="section-title">
+                <User size={20} style={{ color: 'var(--primary-400)' }} />
+                Project Manager
+              </h2>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              <div className="avatar" style={{ background: 'var(--accent-gradient)' }}>
+                {project.manager?.split(' ').map(n => n[0]).join('') || 'PM'}
+              </div>
+              <div>
+                <div style={{ fontWeight: 500, color: 'var(--neutral-100)' }}>{project.manager || 'Not assigned'}</div>
+                <div className="text-sm text-muted">Project Manager</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent Expenses */}
+          {hasPermission('view_budget') && expenses.length > 0 && (
+            <div className="section-card">
+              <div className="section-header">
+                <h2 className="section-title">
+                  Recent Expenses
+                </h2>
+              </div>
+
+              <div>
+                {expenses.slice(0, 4).map((expense) => (
+                  <div key={expense.id} className="expense-item">
+                    <div className="expense-info">
+                      <div className="expense-desc">{expense.description.slice(0, 30)}...</div>
+                      <div className="expense-date">{formatDate(expense.date)}</div>
+                    </div>
+                    <span className="expense-amount">{formatCurrency(expense.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default ProjectDetail

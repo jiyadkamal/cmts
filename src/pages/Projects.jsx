@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
 import Modal from '../components/Modal'
-import ProgressBar from '../components/ProgressBar'
 import {
     Plus,
     Search,
@@ -23,25 +22,31 @@ import {
 import { formatCurrency, formatDate, getDaysRemainingText, getPriorityColor } from '../utils/helpers'
 
 function Projects() {
-    const { hasPermission } = useAuth()
-    const { projects, addProject, updateProject, deleteProject } = useData()
+    const { hasPermission, user } = useAuth()
+    const { projects, addProject, updateProject, deleteProject, joinProject } = useData()
     const [searchTerm, setSearchTerm] = useState('')
     const [statusFilter, setStatusFilter] = useState('all')
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [editingProject, setEditingProject] = useState(null)
     const [activeMenu, setActiveMenu] = useState(null)
+    const [isJoinModalOpen, setIsJoinModalOpen] = useState(false)
+    const [joinProjectId, setJoinProjectId] = useState('')
 
-    const [formData, setFormData] = useState({
+    const initialFormState = {
         name: '',
-        description: '',
         client: '',
+        manager: '',
+        description: '',
         location: '',
-        startDate: '',
-        endDate: '',
         budget: '',
+        startDate: new Date().toISOString().split('T')[0],
+        endDate: '',
         priority: 'Medium',
-        manager: ''
-    })
+        status: 'In Progress',
+        milestones: []
+    }
+
+    const [formData, setFormData] = useState(initialFormState)
 
     const filteredProjects = projects.filter(project => {
         const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -55,31 +60,24 @@ function Projects() {
             setEditingProject(project)
             setFormData({
                 name: project.name,
-                description: project.description,
                 client: project.client,
+                manager: project.manager || '',
+                description: project.description || '',
                 location: project.location,
+                budget: project.budget,
                 startDate: project.startDate,
                 endDate: project.endDate,
-                budget: project.budget.toString(),
-                priority: project.priority,
-                manager: project.manager
+                priority: project.priority || 'Medium',
+                status: project.status || 'In Progress',
+                milestones: project.milestones || []
             })
         } else {
             setEditingProject(null)
-            setFormData({
-                name: '',
-                description: '',
-                client: '',
-                location: '',
-                startDate: '',
-                endDate: '',
-                budget: '',
-                priority: 'Medium',
-                manager: ''
-            })
+            setFormData(initialFormState)
         }
         setIsModalOpen(true)
     }
+
 
     const handleSubmit = async (e) => {
         e.preventDefault()
@@ -100,6 +98,21 @@ function Projects() {
         } catch (err) {
             console.error('Error saving project:', err)
             alert('Failed to save project. Please try again.')
+        }
+    }
+
+    const handleJoinProject = async (e) => {
+        e.preventDefault()
+        if (!joinProjectId.trim()) return
+
+        try {
+            await joinProject(joinProjectId.trim())
+            setIsJoinModalOpen(false)
+            setJoinProjectId('')
+            alert('Successfully joined the project!')
+        } catch (err) {
+            console.error('Error joining project:', err)
+            alert(err.message || 'Failed to join project. Please check the ID.')
         }
     }
 
@@ -196,7 +209,6 @@ function Projects() {
           padding: var(--space-6);
           transition: all var(--transition-base);
           position: relative;
-          overflow: hidden;
         }
         
         .project-card::before {
@@ -328,27 +340,6 @@ function Projects() {
           color: var(--neutral-500);
         }
         
-        .project-progress-section {
-          margin-bottom: var(--space-5);
-        }
-        
-        .progress-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: var(--space-2);
-        }
-        
-        .progress-label {
-          font-size: var(--font-size-sm);
-          color: var(--neutral-400);
-        }
-        
-        .progress-value {
-          font-size: var(--font-size-sm);
-          font-weight: 600;
-          color: var(--neutral-100);
-        }
         
         .project-footer {
           display: flex;
@@ -381,11 +372,7 @@ function Projects() {
           gap: var(--space-2);
         }
         
-        .priority-indicator {
-          position: absolute;
-          top: var(--space-4);
-          right: var(--space-4);
-        }
+
       `}</style>
 
             {/* Header */}
@@ -394,12 +381,20 @@ function Projects() {
                     <h1>Projects</h1>
                     <p>Manage and track all your construction projects</p>
                 </div>
-                {hasPermission('create_projects') && (
-                    <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-                        <Plus size={20} />
-                        New Project
-                    </button>
-                )}
+                <div className="page-actions" style={{ display: 'flex', gap: 'var(--space-3)' }}>
+                    {user?.role !== 'Contractor' && user?.role !== 'Admin' && (
+                        <button className="btn btn-secondary" onClick={() => setIsJoinModalOpen(true)}>
+                            <Plus size={20} />
+                            Join Project
+                        </button>
+                    )}
+                    {hasPermission('create_projects') && (
+                        <button className="btn btn-primary" onClick={() => handleOpenModal()}>
+                            <Plus size={20} />
+                            New Project
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Filters */}
@@ -433,43 +428,71 @@ function Projects() {
                         className="project-card"
                         style={{ animationDelay: `${index * 50}ms` }}
                     >
-                        <div className="priority-indicator">
-                            <span className={`badge badge-${getPriorityColor(project.priority)}`}>
-                                {project.priority}
-                            </span>
-                        </div>
-
                         <div className="project-header">
                             <div className="project-icon">
                                 <Building2 size={24} />
                             </div>
-                            {hasPermission('create_projects') && (
-                                <div className="project-actions">
-                                    <button
-                                        className="actions-btn"
-                                        onClick={() => setActiveMenu(activeMenu === project.id ? null : project.id)}
-                                    >
-                                        <MoreVertical size={20} />
-                                    </button>
-                                    {activeMenu === project.id && (
-                                        <div className="actions-menu">
-                                            <button onClick={() => { handleOpenModal(project); setActiveMenu(null); }}>
-                                                <Edit size={16} /> Edit
-                                            </button>
-                                            <Link to={`/projects/${project.id}`} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', width: '100%', padding: 'var(--space-2) var(--space-3)', color: 'var(--neutral-300)', fontSize: 'var(--font-size-sm)', borderRadius: 'var(--radius-md)' }}>
-                                                <Eye size={16} /> View Details
-                                            </Link>
-                                            <button className="danger" onClick={() => handleDelete(project.id)}>
-                                                <Trash2 size={16} /> Delete
-                                            </button>
-                                        </div>
-                                    )}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+                                <div className="priority-indicator-static">
+                                    <span className={`badge badge-${getPriorityColor(project.priority)}`}>
+                                        {project.priority}
+                                    </span>
                                 </div>
-                            )}
+                                {hasPermission('view_projects') && (
+                                    <div className="project-actions">
+                                        <button
+                                            className="actions-btn"
+                                            onClick={() => setActiveMenu(activeMenu === project.id ? null : project.id)}
+                                        >
+                                            <MoreVertical size={20} />
+                                        </button>
+                                        {activeMenu === project.id && (
+                                            <div className="actions-menu">
+                                                {hasPermission('create_projects') && (
+                                                    <button onClick={() => { handleOpenModal(project); setActiveMenu(null); }}>
+                                                        <Edit size={16} /> Edit
+                                                    </button>
+                                                )}
+                                                <Link to={`/projects/${project.id}`} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', width: '100%', padding: 'var(--space-2) var(--space-3)', color: 'var(--neutral-300)', fontSize: 'var(--font-size-sm)', borderRadius: 'var(--radius-md)' }}>
+                                                    <Eye size={16} /> View Details
+                                                </Link>
+                                                {hasPermission('create_projects') && (
+                                                    <button className="danger" onClick={() => handleDelete(project.id)}>
+                                                        <Trash2 size={16} /> Delete
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         <h3 className="project-name">{project.name}</h3>
                         <p className="project-client">{project.client}</p>
+
+                        {project.ownerId === user?.id && (
+                            <div className="project-id-badge" style={{
+                                fontSize: 'var(--font-size-xs)',
+                                color: 'var(--neutral-500)',
+                                marginBottom: 'var(--space-4)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 'var(--space-2)',
+                                cursor: 'help'
+                            }} title="Share this ID with others to join">
+                                <span>ID: {project.id}</span>
+                                <button
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(project.id)
+                                        alert('Project ID copied to clipboard!')
+                                    }}
+                                    style={{ background: 'none', border: 'none', color: 'var(--primary-400)', cursor: 'pointer', padding: 0 }}
+                                >
+                                    Copy
+                                </button>
+                            </div>
+                        )}
 
                         <div className="project-meta">
                             <div className="meta-item">
@@ -490,13 +513,6 @@ function Projects() {
                             </div>
                         </div>
 
-                        <div className="project-progress-section">
-                            <div className="progress-header">
-                                <span className="progress-label">Progress</span>
-                                <span className="progress-value">{project.progress}%</span>
-                            </div>
-                            <ProgressBar value={project.progress} variant="auto" />
-                        </div>
 
                         <div className="project-footer">
                             <span className="status-badge" style={getStatusStyle(project.status)}>
@@ -657,6 +673,40 @@ function Projects() {
                             value={formData.manager}
                             onChange={(e) => setFormData({ ...formData, manager: e.target.value })}
                             placeholder="Manager name"
+                        />
+                    </div>
+                </form>
+            </Modal>
+
+            {/* Join Project Modal */}
+            <Modal
+                isOpen={isJoinModalOpen}
+                onClose={() => setIsJoinModalOpen(false)}
+                title="Join Project"
+                footer={
+                    <>
+                        <button className="btn btn-secondary" onClick={() => setIsJoinModalOpen(false)}>
+                            Cancel
+                        </button>
+                        <button className="btn btn-primary" onClick={handleJoinProject} disabled={!joinProjectId.trim()}>
+                            Join Project
+                        </button>
+                    </>
+                }
+            >
+                <form onSubmit={handleJoinProject}>
+                    <p style={{ color: 'var(--neutral-400)', marginBottom: 'var(--space-4)', fontSize: 'var(--font-size-sm)' }}>
+                        Enter the Project ID shared with you by the contractor to join and view project details.
+                    </p>
+                    <div className="form-group">
+                        <label className="form-label">Project ID *</label>
+                        <input
+                            type="text"
+                            className="form-input"
+                            value={joinProjectId}
+                            onChange={(e) => setJoinProjectId(e.target.value)}
+                            placeholder="Enter project ID"
+                            required
                         />
                     </div>
                 </form>

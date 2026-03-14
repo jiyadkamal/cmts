@@ -11,21 +11,23 @@ import {
     Bell,
     Search,
     HardHat,
-    Settings,
-    ChevronRight
+    ChevronRight,
+    Folder
 } from 'lucide-react'
+import { useData } from '../context/DataContext'
 
 const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard, roles: ['Admin', 'Engineer', 'Contractor', 'Client'] },
     { name: 'Projects', href: '/projects', icon: FolderKanban, roles: ['Admin', 'Engineer', 'Contractor', 'Client'] },
     { name: 'Tasks', href: '/tasks', icon: ListTodo, roles: ['Admin', 'Engineer', 'Contractor'] },
     { name: 'Materials', href: '/materials', icon: Package, roles: ['Admin', 'Engineer', 'Contractor'] },
-    { name: 'Budget', href: '/budget', icon: DollarSign, roles: ['Admin', 'Engineer', 'Client'] },
+    { name: 'Budget', href: '/budget', icon: DollarSign, roles: ['Admin', 'Engineer', 'Contractor', 'Client'] },
     { name: 'Users', href: '/users', icon: Users, roles: ['Admin'] },
 ]
 
 function Layout() {
     const { user, logout } = useAuth()
+    const { projects, selectedProjectId, setSelectedProjectId } = useData()
     const location = useLocation()
 
     const filteredNav = navigation.filter(item => item.roles.includes(user?.role))
@@ -88,13 +90,6 @@ function Layout() {
                         ))}
                     </div>
 
-                    <div className="sidebar-section">
-                        <div className="sidebar-section-title">Settings</div>
-                        <button className="sidebar-link" style={{ width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer' }}>
-                            <Settings className="sidebar-link-icon" size={20} />
-                            Preferences
-                        </button>
-                    </div>
                 </nav>
 
                 <div className="sidebar-footer">
@@ -143,6 +138,28 @@ function Layout() {
                     </div>
 
                     <div className="header-right">
+                        {/* Project Selector */}
+                        <div className="project-selector-wrapper">
+                            <div className="project-selector-icon">
+                                <Folder size={18} />
+                            </div>
+                            <select
+                                className="project-selector"
+                                value={selectedProjectId}
+                                onChange={(e) => setSelectedProjectId(e.target.value)}
+                            >
+                                {projects.length === 0 ? (
+                                    <option value="">No Projects Joined</option>
+                                ) : (
+                                    projects.map(project => (
+                                        <option key={project.id} value={project.id}>
+                                            {project.name}
+                                        </option>
+                                    ))
+                                )}
+                            </select>
+                        </div>
+
                         <div className="search-box">
                             <Search className="search-icon" size={18} />
                             <input type="text" placeholder="Search..." />
@@ -162,6 +179,48 @@ function Layout() {
                     <Outlet />
                 </div>
             </main>
+
+            <style>{`
+                .project-selector-wrapper {
+                    display: flex;
+                    align-items: center;
+                    gap: var(--space-2);
+                    background: var(--neutral-850);
+                    border: 1px solid var(--neutral-700);
+                    border-radius: var(--radius-lg);
+                    padding: 0 var(--space-3);
+                    height: 40px;
+                    transition: all var(--transition-base);
+                }
+
+                .project-selector-wrapper:hover {
+                    border-color: var(--primary-500);
+                    background: var(--neutral-800);
+                }
+
+                .project-selector-icon {
+                    color: var(--primary-400);
+                    display: flex;
+                    align-items: center;
+                }
+
+                .project-selector {
+                    background: transparent;
+                    border: none;
+                    color: var(--neutral-100);
+                    font-size: var(--font-size-sm);
+                    font-weight: 500;
+                    cursor: pointer;
+                    outline: none;
+                    padding-right: var(--space-2);
+                    max-width: 200px;
+                }
+
+                .project-selector option {
+                    background: var(--neutral-900);
+                    color: var(--neutral-100);
+                }
+            `}</style>
         </div>
     )
 }

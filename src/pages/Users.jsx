@@ -1,29 +1,55 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useData } from '../context/DataContext'
-import Modal from '../components/Modal'
+
 import {
-    Plus,
     Search,
     Users as UsersIcon,
     Mail,
     Phone,
     Shield,
-    Edit,
-    Trash2,
-    MoreVertical,
     UserCheck,
-    UserX,
-    Calendar
+    Calendar,
+    MoreVertical,
+    Edit2,
+    Trash2,
+    X,
+    Check
 } from 'lucide-react'
 import { formatDate } from '../utils/helpers'
 
 function Users() {
-    const { hasPermission, user: currentUser } = useAuth()
-    const { users } = useData()
+    const { users, updateUser, deleteUser } = useData()
     const [searchTerm, setSearchTerm] = useState('')
     const [roleFilter, setRoleFilter] = useState('all')
     const [activeMenu, setActiveMenu] = useState(null)
+    const [editingUser, setEditingUser] = useState(null)
+    const [isSaving, setIsSaving] = useState(false)
+
+
+    const handleDeleteUser = async (userId) => {
+        if (window.confirm('Are you sure you want to remove this user? This action cannot be undone.')) {
+            try {
+                await deleteUser(userId)
+                setActiveMenu(null)
+            } catch (err) {
+                alert('Failed to delete user: ' + err.message)
+            }
+        }
+    }
+
+    const handleUpdateUser = async (e) => {
+        e.preventDefault()
+        try {
+            setIsSaving(true)
+            await updateUser(editingUser)
+            setEditingUser(null)
+        } catch (err) {
+            alert('Failed to update user: ' + err.message)
+        } finally {
+            setIsSaving(false)
+        }
+    }
 
     const filteredUsers = users.filter(user => {
         const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -170,6 +196,216 @@ function Users() {
           background-position: right 12px center;
           background-size: 16px;
         }
+
+        /* Action Menu */
+        .actions-dropdown {
+          position: absolute;
+          top: var(--space-6);
+          right: var(--space-6);
+          z-index: 10;
+        }
+        
+        .menu-trigger {
+          width: 32px;
+          height: 32px;
+          border-radius: var(--radius-full);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--neutral-400);
+          cursor: pointer;
+          transition: all var(--transition-base);
+          background: transparent;
+          border: none;
+        }
+        
+        .menu-trigger:hover, .menu-trigger.active {
+          background: var(--neutral-800);
+          color: var(--neutral-100);
+        }
+        
+        .menu-content {
+          position: absolute;
+          top: 100%;
+          right: 0;
+          margin-top: var(--space-2);
+          background: var(--neutral-900);
+          border: 1px solid var(--neutral-800);
+          border-radius: var(--radius-lg);
+          padding: var(--space-1);
+          min-width: 140px;
+          box-shadow: var(--shadow-xl);
+          animation: scaleIn 0.2s ease-out;
+        }
+        
+        .menu-item {
+          display: flex;
+          align-items: center;
+          gap: var(--space-3);
+          padding: var(--space-2) var(--space-3);
+          font-size: var(--font-size-sm);
+          color: var(--neutral-300);
+          border-radius: var(--radius-md);
+          cursor: pointer;
+          transition: all var(--transition-fast);
+          width: 100%;
+          border: none;
+          background: transparent;
+          text-align: left;
+        }
+        
+        .menu-item:hover {
+          background: var(--neutral-800);
+          color: var(--neutral-100);
+        }
+        
+        .menu-item.danger:hover {
+          background: rgba(239, 68, 68, 0.1);
+          color: var(--error-400);
+        }
+        
+        /* Modal Styles */
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.7);
+          backdrop-filter: blur(4px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+          padding: var(--space-4);
+        }
+        
+        .edit-modal {
+          background: var(--neutral-900);
+          border: 1px solid var(--neutral-800);
+          border-radius: var(--radius-2xl);
+          width: 100%;
+          max-width: 500px;
+          box-shadow: var(--shadow-2xl);
+          animation: zoomIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+          overflow: hidden;
+        }
+        
+        .modal-header {
+          padding: var(--space-5) var(--space-6);
+          border-bottom: 1px solid var(--neutral-800);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+        
+        .modal-header h2 {
+          font-size: var(--font-size-xl);
+          font-weight: 600;
+          margin: 0;
+        }
+        
+        .close-btn {
+          background: transparent;
+          border: none;
+          color: var(--neutral-500);
+          cursor: pointer;
+          transition: color 0.2s;
+        }
+        
+        .close-btn:hover {
+          color: var(--neutral-100);
+        }
+        
+        .modal-body {
+          padding: var(--space-6);
+        }
+        
+        .form-group {
+          margin-bottom: var(--space-4);
+        }
+        
+        .form-group label {
+          display: block;
+          font-size: var(--font-size-sm);
+          font-weight: 500;
+          color: var(--neutral-400);
+          margin-bottom: var(--space-2);
+        }
+        
+        .form-input {
+          width: 100%;
+          padding: var(--space-3) var(--space-4);
+          background: var(--neutral-850);
+          border: 1px solid var(--neutral-700);
+          border-radius: var(--radius-lg);
+          color: var(--neutral-100);
+          font-size: var(--font-size-sm);
+          transition: all 0.2s;
+        }
+        
+        .form-input:focus {
+          outline: none;
+          border-color: var(--primary-500);
+          box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }
+        
+        .modal-footer {
+          padding: var(--space-5) var(--space-6);
+          border-top: 1px solid var(--neutral-800);
+          display: flex;
+          justify-content: flex-end;
+          gap: var(--space-3);
+        }
+        
+        .btn {
+          padding: var(--space-2) var(--space-4);
+          border-radius: var(--radius-lg);
+          font-size: var(--font-size-sm);
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
+        }
+        
+        .btn-ghost {
+          background: transparent;
+          border: 1px solid var(--neutral-700);
+          color: var(--neutral-300);
+        }
+        
+        .btn-ghost:hover {
+          background: var(--neutral-800);
+          color: var(--neutral-100);
+        }
+        
+        .btn-primary {
+          background: var(--primary-gradient);
+          border: none;
+          color: white;
+        }
+        
+        .btn-primary:hover {
+          opacity: 0.9;
+          transform: translateY(-1px);
+        }
+        
+        .btn-primary:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        @keyframes scaleIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        
+        @keyframes zoomIn {
+          from { opacity: 0; transform: scale(0.9) translateY(20px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
         
         .users-grid {
           display: grid;
@@ -228,63 +464,6 @@ function Users() {
           font-size: var(--font-size-sm);
           color: var(--neutral-500);
           margin-bottom: var(--space-2);
-        }
-        
-        .user-actions {
-          position: relative;
-        }
-        
-        .actions-btn {
-          padding: var(--space-2);
-          background: transparent;
-          border: none;
-          color: var(--neutral-400);
-          cursor: pointer;
-          border-radius: var(--radius-md);
-          transition: all var(--transition-fast);
-        }
-        
-        .actions-btn:hover {
-          background: var(--neutral-800);
-          color: var(--neutral-200);
-        }
-        
-        .actions-menu {
-          position: absolute;
-          top: 100%;
-          right: 0;
-          background: var(--neutral-850);
-          border: 1px solid var(--neutral-700);
-          border-radius: var(--radius-lg);
-          padding: var(--space-2);
-          min-width: 140px;
-          z-index: var(--z-dropdown);
-          box-shadow: var(--shadow-xl);
-        }
-        
-        .actions-menu button {
-          display: flex;
-          align-items: center;
-          gap: var(--space-2);
-          width: 100%;
-          padding: var(--space-2) var(--space-3);
-          background: transparent;
-          border: none;
-          color: var(--neutral-300);
-          font-size: var(--font-size-sm);
-          cursor: pointer;
-          border-radius: var(--radius-md);
-          transition: all var(--transition-fast);
-        }
-        
-        .actions-menu button:hover {
-          background: var(--neutral-800);
-          color: var(--neutral-100);
-        }
-        
-        .actions-menu button.danger:hover {
-          background: rgba(239, 68, 68, 0.15);
-          color: var(--danger-400);
         }
         
         .user-details {
@@ -352,12 +531,7 @@ function Users() {
                     <h1>User Management</h1>
                     <p>Manage system users and their roles</p>
                 </div>
-                {hasPermission('manage_users') && (
-                    <button className="btn btn-primary">
-                        <Plus size={20} />
-                        Add User
-                    </button>
-                )}
+
             </div>
 
             {/* Role Stats */}
@@ -442,29 +616,41 @@ function Users() {
                                     {user.role}
                                 </span>
                             </div>
-                            {hasPermission('manage_users') && user.id !== currentUser?.id && (
-                                <div className="user-actions">
-                                    <button
-                                        className="actions-btn"
-                                        onClick={() => setActiveMenu(activeMenu === user.id ? null : user.id)}
-                                    >
-                                        <MoreVertical size={18} />
-                                    </button>
-                                    {activeMenu === user.id && (
-                                        <div className="actions-menu">
-                                            <button>
-                                                <Edit size={14} /> Edit User
-                                            </button>
-                                            <button className="danger">
-                                                <Trash2 size={14} /> Remove
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+
+                            <div className="actions-dropdown">
+                                <button
+                                    className={`menu-trigger ${activeMenu === user.id ? 'active' : ''}`}
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        setActiveMenu(activeMenu === user.id ? null : user.id)
+                                    }}
+                                >
+                                    <MoreVertical size={20} />
+                                </button>
+
+                                {activeMenu === user.id && (
+                                    <div className="menu-content" onClick={(e) => e.stopPropagation()}>
+                                        <button
+                                            className="menu-item"
+                                            onClick={() => {
+                                                setEditingUser({ ...user })
+                                                setActiveMenu(null)
+                                            }}
+                                        >
+                                            <Edit2 size={16} /> Edit User
+                                        </button>
+                                        <button
+                                            className="menu-item danger"
+                                            onClick={() => handleDeleteUser(user.id)}
+                                        >
+                                            <Trash2 size={16} /> Remove User
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
-                        <div className="user-details">
+                        <div className="user-details" onClick={() => setActiveMenu(null)}>
                             <div className="detail-row">
                                 <Mail size={16} />
                                 <span>{user.email}</span>
@@ -475,7 +661,7 @@ function Users() {
                             </div>
                         </div>
 
-                        <div className="user-footer">
+                        <div className="user-footer" onClick={() => setActiveMenu(null)}>
                             <div className="status-indicator">
                                 <div className={`status-dot ${user.status?.toLowerCase() || 'active'}`}></div>
                                 <span style={{ color: user.status === 'Active' ? 'var(--success-400)' : 'var(--neutral-400)' }}>
@@ -500,6 +686,91 @@ function Users() {
                     <p className="empty-state-description">
                         Try adjusting your search or filter criteria
                     </p>
+                </div>
+            )}
+
+            {/* Edit User Modal */}
+            {editingUser && (
+                <div className="modal-overlay" onClick={() => setEditingUser(null)}>
+                    <div className="edit-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2>Edit User</h2>
+                            <button className="close-btn" onClick={() => setEditingUser(null)}>
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <form onSubmit={handleUpdateUser}>
+                            <div className="modal-body">
+                                <div className="form-group">
+                                    <label>Full Name</label>
+                                    <input
+                                        type="text"
+                                        className="form-input"
+                                        value={editingUser.name}
+                                        onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
+                                        required
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label>Email Address</label>
+                                    <input
+                                        type="email"
+                                        className="form-input"
+                                        value={editingUser.email}
+                                        onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
+                                        required
+                                    />
+                                </div>
+                                <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+                                    <div className="form-group">
+                                        <label>Role</label>
+                                        <select
+                                            className="form-input"
+                                            value={editingUser.role}
+                                            onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
+                                        >
+                                            <option value="Admin">Admin</option>
+                                            <option value="Engineer">Engineer</option>
+                                            <option value="Contractor">Contractor</option>
+                                            <option value="Client">Client</option>
+                                        </select>
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Department</label>
+                                        <input
+                                            type="text"
+                                            className="form-input"
+                                            value={editingUser.department}
+                                            onChange={(e) => setEditingUser({ ...editingUser, department: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="form-group">
+                                    <label>Status</label>
+                                    <select
+                                        className="form-input"
+                                        value={editingUser.status || 'Active'}
+                                        onChange={(e) => setEditingUser({ ...editingUser, status: e.target.value })}
+                                    >
+                                        <option value="Active">Active</option>
+                                        <option value="Inactive">Inactive</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-ghost" onClick={() => setEditingUser(null)}>
+                                    Cancel
+                                </button>
+                                <button type="submit" className="btn btn-primary" disabled={isSaving}>
+                                    {isSaving ? 'Saving...' : (
+                                        <>
+                                            <Check size={16} /> Save Changes
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             )}
         </div>
